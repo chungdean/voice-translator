@@ -1213,13 +1213,46 @@ async function copyTranslation() {
 function speakTranslation() {
   const text = document.getElementById('translatedText').textContent;
   if (!text || text === '翻譯結果將顯示在這裡...') return;
-  const targetLang = document.getElementById('targetLang').value.split('-')[0];
+  const langCode = document.getElementById('targetLang').value;
 
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = document.getElementById('targetLang').value;
-  window.speechSynthesis.speak(utt);
-  showToast('🔊 朗讀中...', 'success');
+
+  const speak = () => {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = langCode;
+
+    // Try to find a matching voice
+    const voices = window.speechSynthesis.getVoices();
+    const langPrefix = langCode.split('-')[0].toLowerCase();
+
+    // First: exact match, then prefix match
+    const match =
+      voices.find(v => v.lang.toLowerCase() === langCode.toLowerCase()) ||
+      voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+
+    if (match) utt.voice = match;
+
+    utt.onend = () => {};
+    utt.onerror = (e) => {
+      if (e.error !== 'interrupted') showToast('朗讀失敗：' + e.error, 'error');
+    };
+
+    window.speechSynthesis.speak(utt);
+    showToast('🔊 朗讀中...', 'success');
+  };
+
+  // iOS loads voices asynchronously
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    speak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      speak();
+    };
+    // Fallback if onvoiceschanged never fires
+    setTimeout(speak, 500);
+  }
 }
 
 function swapLanguages() {
